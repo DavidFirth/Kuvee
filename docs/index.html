@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+
+body
+{
+	padding:0px;
+	margin:0px;
+	font-family:"Verdana","Times New Roman", Times, serif; 
+		font-size: 13px;
+}
+div.footer
+{
+	clear:both;
+}
+div.wrapper
+{
+	padding:0px;
+	margin:0px;
+
+	max-width:800px;
+	background-color: rgb(247, 247, 247);
+	border-left:5px solid rgb(87, 183, 228);
+	border-right:5px solid rgb(87, 183, 228);
+	-moz-border-radius: 5px;
+	border-radius: 5px;
+}
+div.wrapper:hover{
+	border-left:5px solid rgb(6, 69, 110);
+	border-right:5px solid rgb(6, 69, 110);
+}
+div.outer
+{
+	margin-top:0px;
+		margin-bottom:5px;
+
+}
+
+div.boxtitle
+{
+	padding:5px;
+	padding-left:10px;
+	margin:0px;
+	color: #ffffff;
+	font-size: 15px;
+	border-left:10px solid #222;
+	background-color: rgb(6, 69, 110);
+}
+
+div.boxtitle span
+{
+	font-size: 13px;
+	font-weight: normal;
+}
+div.boxtitle a{color: #BF0F30}
+div.inner
+{
+padding:1%;
+margin:0px;
+display: block;
+}
+div.inner span.err {
+	font-family:"Verdana","Times New Roman", Times, serif;
+	 color:#BF0F30;
+	 font-weight:normal;
+	 font-style:italic;
+ }
+div.inner a{color: #BF0F30}
+div.inner h2{color: #BF0F30}
+.qvtextarea
+{
+	width:98%;
+	margin-bottom:10px;
+	border:1px solid #3c4854;
+	overflow:auto;
+	-moz-border-radius: 2px;
+	border-radius: 2px;
+}
+.qvtextarea:focus{
+	border:1px solid #4fa2fc;
+}
+.qvbutton
+{
+	background:#ffffff;
+	padding:5px;
+	border:1px solid #3c4854;
+	-moz-border-radius: 5px;
+	border-radius: 5px;
+}
+.qvbutton:hover
+{
+	background:rgb(87, 183, 228);
+}
+form
+{
+	font-style: normal;
+}
+</style>
+
+<script src="matrix.js"></script>
+<script src="glm.js"></script>
+<script src="qvcalc.js"></script>
+<script>
+//qvcalc: Takes input from the form and calculates quasi variance
+function qvcalc (form) {
+	var levels = form.levels.value;
+	var matbox = form.matbox.value;
+	var estimates = form.esti.value;
+	var validFlag = 1;
+	var estFlag = 1;
+
+	levels = levels.replace(/\s*$/, ''); // Remove trailing whitespace
+	levels = levels.replace(/^\s*/, ''); // Remove leading whitespace
+	matbox = matbox.replace(/\s*$/, ''); // Remove trailing whitespace
+	matbox = matbox.replace(/^\s*/, ''); // Remove leading whitespace
+	estimates = estimates.replace(/\s*$/, ''); // Remove trailing whitespace
+	estimates = estimates.replace(/^\s*/, ''); // Remove leading whitespace
+	
+	//Reset the text
+	document.getElementById("inLevels").innerHTML="";
+	document.getElementById("inMatbox").innerHTML="";
+	document.getElementById("inTitle").innerHTML="";
+	document.getElementById("outQV").innerHTML="";
+	document.getElementById("outPlot").innerHTML="";
+	document.getElementById("outImg").innerHTML="";
+	document.getElementById("outMat").innerHTML="";
+	document.getElementById("outTitle").innerHTML="";
+	document.getElementById('inBox').style.display="";
+	document.getElementById('outBox').style.display="none";
+	document.getElementById("outImg").style.display="none";
+
+	//Validate
+	if(checkMatrix(estimates).length != 0){
+		estFlag = 0;
+	} else estimates = estimates.split(/\s+/g);
+	if (checkInteger(levels) != 1){
+		document.getElementById("inLevels").innerHTML += "<span class='err'> Must be a single integer.</span>";
+	validFlag = 0;
+	}
+	if (levels < 3){
+		document.getElementById("inLevels").innerHTML += "<span class='err'> Must be 3 or more levels to calculate quasi variance.</span>";
+	validFlag = 0;
+	}
+	var matError = checkMatrix(matbox);
+	if(matError.length != 0){
+		document.getElementById("inMatbox").innerHTML +="<span class='err'>"+ matError + "</span>";
+	validFlag = 0;
+	}
+
+
+	//Fill matrix and check number of rows
+	if(validFlag == 1){ 
+		covmat = stringToMatrix(matbox);
+			if(covmat.length != levels){
+			document.getElementById("inMatbox").innerHTML += "<span class='err'>There should be " + levels + " rows in the matrix.</span>";
+		validFlag = 0;
+		}
+	}
+
+
+	//Do the glm and produce output
+	if(validFlag == 1){
+		//Find qv
+		try {var qv = quasiVariance(covmat);}
+		catch(err){
+			document.getElementById("inMatbox").innerHTML += " <span class='err'>" + err.message + "</span>";
+			validFlag = 0;
+		}
+		//Check for error in finding qv
+		if(validFlag == 1) {
+			document.getElementById('inBox').style.display="none";
+			document.getElementById('outBox').style.display="";
+			document.getElementById("outQV").innerHTML=qvToHTML(qv);
+			document.getElementById("outMat").innerHTML += "<pre>" + matrixToTable(qv.covmat.toFixed(5)) + "</pre>";
+
+			if(estimates.length == levels){
+				document.getElementById("outQV").innerHTML=qvEstToHTML(qv,estimates);
+				document.getElementById("outImg").style.display="";
+				plotqse(estimates, qv.quasiSE, "outImg");
+			}
+			else {
+				document.getElementById("outPlot").innerHTML ="<br><b>Cannot create plot:</b> no valid estimates given.";
+			}
+		}
+	}
+	if(validFlag == 0) document.getElementById("outTitle").innerHTML="Sorry, the input was not recognised as being in a viable format, please refer to red text for details. <br> (If you believe this is a bug, please <a href='mailto:s.killingbeck@warwick.ac.uk?subject=Kuvee bug&body=Please paste input here:' target='_blank'>email the input</A> to allow for improvements.)";
+}
+	
+function example(form){
+	form.levels.value = "5";
+	form.matbox.value = "0 \n0 0.0533 \n0 0.0428 0.1824 \n0 0.0390 0.0384 0.1428 \n0 0.0404 0.0412 0.0387 0.0941 ";
+	form.esti.value = "1 3 2 4 6";
+	qvcalc(form);
+}
+
+function clearf(form){
+  	form.levels.value = "";
+	form.matbox.value = "";
+	form.esti.value = "";
+	  //(Re)set the text
+	//Reset the text
+	document.getElementById("inLevels").innerHTML="";
+	document.getElementById("inMatbox").innerHTML="";
+	document.getElementById("inEsti").innerHTML="";
+	document.getElementById("inTitle").innerHTML="";
+	document.getElementById("outQV").innerHTML="";
+	document.getElementById("outPlot").innerHTML="";
+	document.getElementById("outLink").innerHTML="";
+	document.getElementById("outMat").innerHTML="";
+	document.getElementById("outTitle").innerHTML="";
+	document.getElementById('inBox').style.display="";
+	document.getElementById('outBox').style.display="none";
+	document.getElementById("outImg").style.display="none";
+}
+//matrixToTable: converts a matrix to a HTML table format
+function matrixToTable(mat) {
+	var str = "<table>";
+	
+	for (var i = 0; i < mat.length; i++){
+		str = str + "<tr>"
+		for (var j = 0; j < mat[i].length; j++){
+			str = str + "<td>  " + mat[i][j] + "  </td>";
+		}
+	str = str + "</tr>"
+	}
+	return str+ "</table>";
+}
+qvEstToHTML = function(qv,est){
+	var n = qv.covmat.length;
+	
+	//Table of SE, QV, QSE
+	var strTable = "<table cellspacing='5'><tr><th> Level &nbsp;</th><th> Estimate &nbsp;</th><th> Standard Error &nbsp;</th><th> Quasi Variance &nbsp;</th><th> Quasi SE &nbsp;</th></th>"
+	for(var i = 0; i < n; i++){
+		strTable += "<tr><td> " + (i+1) + " </td><td> " + Number(est[i]).toFixed(3) + " </td><td> " + Number(qv.SE[i]).toFixed(3) + " </td><td> " + qv.quasiVar[i].toFixed(3)  + " </td><td> " + qv.quasiSE[i].toFixed(3)  + "</td></tr>"
+	}
+	strTable += "</table>"
+	if(!qv.relerrs.isNull(7)){
+		var simpleErrPos = Math.max.apply(null, qv.relerrs);
+		var simpleErrNeg = Math.min.apply(null, qv.relerrs);
+		var worstErr = worstErrors(qv.covmat, qv.quasiVar);
+		var strErr = "<b>Approximation Errors</b><br>For the standard error of a simple contrast, the error from using quasi variances is between " + Number(simpleErrNeg*100).toFixed(2) + "% and " + Number(simpleErrPos*100).toFixed(2) + "%.<br>Errors: " + qv.relerrs.toFixed(3);
+		strErr += "<br> The worst possible contrast errors in quasi variances are between " + Number(worstErr.min*100).toFixed(2) + "% and " + Number(worstErr.max*100).toFixed(2) + "%.";
+	} else {
+		strErr = "The quasi variances are exact in this case.";
+	}
+	
+	return strTable + "<br>" + strErr;
+}
+
+qvToHTML = function(qv){
+	var n = qv.covmat.length;
+	
+	//Table of SE, QV, QSE
+	var strTable = "<table cellspacing='5'><tr><th> Level &nbsp;</th><th> Standard Error &nbsp;</th><th> Quasi Variance &nbsp;</th><th> Quasi SE &nbsp;</th></th>"
+	for(var i = 0; i < n; i++){
+		strTable += "<tr><td> " + (i+1) + " </td><td> " + Number(qv.SE[i]).toFixed(3) + " </td><td> " + qv.quasiVar[i].toFixed(3)  + " </td><td> " + qv.quasiSE[i].toFixed(3)  + "</td></tr>"
+	}
+	strTable += "</table>"
+	if(!qv.relerrs.isNull(7)){
+		var simpleErrPos = Math.max.apply(null, qv.relerrs);
+		var simpleErrNeg = Math.min.apply(null, qv.relerrs);
+		var worstErr = worstErrors(qv.covmat, qv.quasiVar);
+		var strErr = "<b>Approximation Errors</b><br>For the standard error of a simple contrast, the error from using quasi variances is between " + Number(simpleErrNeg*100).toFixed(2) + "% and " + Number(simpleErrPos*100).toFixed(2) + "%.";
+		strErr += "<br> The worst possible contrast errors in quasi variances are between " + Number(worstErr.min*100).toFixed(2) + "% and " + Number(worstErr.max*100).toFixed(2) + "%.";
+	} else {
+		var strErr = "The quasi variances are exact in this case.";
+	}
+	return strTable + "<br>" + strErr;
+}
+//vectorToHTML: converts a vector to a printable string format
+function vectorToHTML(vec){
+	var str = "<table>";
+	for (var i = 0; i < vec.length; i++){
+		str = str + "<tr><td>" + vec[i] + "</td></tr>";
+	}
+	return str + "</table>";
+}
+
+//vectorToText: converts a vector to a printable string format
+function vectorToText(vec){
+	var str = "";
+	for (var i = 0; i < vec.length; i++){
+		str = str + vec[i] + "\n";
+	}
+	return str;
+}
+//checkMatrix: checks if a string is a matrix
+function checkMatrix (str) {
+	var flag = 1;
+	var error = "";
+	//Search for any characters that arent digits/decimal points/whitespace or new line/plus/minus
+	if (str.search(/^[\d\.\s\+\-]+$/) === -1) {
+	flag = 0;
+	error = "Non-numeric characters were entered in the matrix box.";
+	}
+	return(error);
+}
+
+//stringToMatrix: Converts a matrix in string form to an array
+function stringToMatrix(str) {
+	var text = str.replace(/\s+$/g, "");
+	var rowArray = text.split("\n");
+	var nrows = rowArray.length;
+	var mat = new Array(nrows);
+	for(var i = 0; i < nrows; i++){
+		rowArray[i] = rowArray[i].replace(/\s*$/, ''); // Remove trailing whitespace
+		rowArray[i] = rowArray[i].replace(/^\s*/, ''); // Remove leading whitespace
+		mat[i] = rowArray[i].split(/\s+/g).map(Number);
+	}
+	return mat;
+}
+
+//matrixToHTML: converts a matrix to a printable string format
+function matrixToText(mat) {
+	var str = "";
+	
+	for (var i = 0; i < mat.length; i++){
+		for (var j = 0; j < mat[i].length; j++){
+			str = str + mat[i][j] + "	";
+		}
+	str = str + "\n"
+	}
+	return str;
+}
+
+//checkInteger: checks if a string is an integer
+function checkInteger(str){
+	var flag = 1;
+	if (str.search(/^[\d\+]+$/) === -1) {
+	flag = 0;
+	}
+	return flag;
+}
+
+
+
+plotqse = function(est,qse,location){
+	var n = est.length;
+	var upper = est.plus(qse);
+	var lower = est.minus(qse);
+	var minval = lower.min();
+	var maxval = upper.max()
+	var range = maxval-minval;
+
+	var x_int = 500/n;
+	var x_lower = 70;
+	var x_upper = 570;
+	var y_lower = 50;
+	var y_upper = 350;
+	var y_labn = 8; //Number of y labels
+	var y_range = (y_upper - y_lower)*(y_labn-1)/(y_labn);
+
+	//var c=document.getElementById("myCanvas");
+	document.getElementById(location).innerHTML += "<canvas id='plotcanvas' width='600' height='400' style='border:1px solid #c3c3c3;'>Sorry, cannot plot a graph - your browser does not support the HTML5 canvas tag.</canvas>";
+	var c=document.getElementById("plotcanvas");
+	var ctx=c.getContext("2d");
+
+	//x-label
+	ctx.font="15px Arial";
+	ctx.textAlign="center";
+	ctx.fillText("Level",300,385);
+
+
+	//y-label
+	ctx.font="15px Arial";
+	ctx.translate(20,200);
+	ctx.rotate(-Math.PI/2);
+	ctx.textAlign="center";
+	ctx.fillText("Estimate",0,0);
+	ctx.rotate(Math.PI/2);
+	ctx.translate(-20,-200);
+
+	//draw axis box
+	ctx.lineWidth=2;
+	ctx.strokeStyle="#000000";
+	ctx.moveTo(x_lower, y_lower);
+	ctx.lineTo(x_lower,y_upper);
+	ctx.lineTo(x_upper,y_upper);
+	ctx.lineTo(x_upper,y_lower);
+	ctx.lineTo(x_lower,y_lower);
+	ctx.stroke();
+	ctx.font="20px Arial";
+	ctx.fillText("Comparison Intervals Using Quasi Standard Errors",300,30);
+	ctx.font="10px Arial";
+	ctx.fillStyle = "#2E2E2E";
+	//ctx.fillText( "Quasi Variance Calculator (" + window.location.href.replace(/#.*/,'') + ")",300,395);
+	ctx.fillText( "Kuvee - Quasi Variance Calculator",300,395);
+	ctx.fillStyle = "#000000";
+	ctx.translate(x_lower, y_upper);
+
+	//Print levels on x axis
+	ctx.font="12px Arial";
+	ctx.textAlign="center";
+	for(var i = 0; i < n; i++){
+		ctx.fillText(Number(i+1), (i + .5)*x_int, 15);
+	}
+
+
+	//Print levels on y axis
+	ctx.font="12px Arial";
+	ctx.textAlign="right";
+	for(var i = 0; i < y_labn; i++){
+		ctx.fillText(String(Number(lower.min()+i*range/(y_labn-1))).slice(0,5), -7, - (y_upper - y_lower)*(i+0.5)/y_labn + 3);
+			ctx.moveTo(-5, - (y_upper - y_lower)*(i+0.5)/y_labn);
+			ctx.lineTo(0, - (y_upper - y_lower)*(i+0.5)/y_labn);
+	}
+	ctx.stroke();
+	var scale = y_range/range;
+	ctx.lineWidth=1;
+	for(var i = 0; i < n; i++){
+		ctx.beginPath();
+			ctx.arc((i + 0.5)*x_int, - 0.5*(y_upper - y_lower)/y_labn - (est[i]-minval)*scale,2,0,2*Math.PI);
+			ctx.stroke();
+			ctx.moveTo((i + 0.5)*x_int, - 0.5*(y_upper - y_lower)/y_labn - (lower[i]-minval)*scale);
+			ctx.lineTo((i + 0.5)*x_int, - 0.5*(y_upper - y_lower)/y_labn - (upper[i]-minval)*scale);
+			ctx.stroke();
+	}
+
+	var mylink = c.toDataURL("image/png");
+	document.getElementById(location).src = mylink;
+}
+
+function toggleBox(obj) {
+	var el = document.getElementById(obj);
+	if ( el.style.display != 'none' ) {
+		el.style.display = 'none';
+	}
+	else {
+		el.style.display = '';
+	}
+}
+
+function elementSupportsAttribute(element, attribute) {
+	var test = document.createElement(element);
+	if (attribute in test) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+//Ceck if browser supports placeholders
+function loadcheck(form){
+	if (!elementSupportsAttribute('textarea', 'placeholder')) {
+		form.levels.value = "Number of contrast categories";
+		form.matbox.value = "Variance-Covariance matrix for the contrasts";
+		form.esti.value = "(Optional) estimates for the contrasts coefficients (for plotting)";
+	}
+}
+</script>
+</head>
+
+<body onload="loadcheck(qvIn)">
+
+<div class="wrapper"> 
+  <div class="boxtitle" onclick="toggleBox('helpBox');">Kuvee: Help (Click to expand)</div>
+
+  <div class="outer"> 
+	<div class="inner" id="helpBox" style="display:none"> 
+
+	  <p>To calculate the quasi variances for a categorical variable with levels {1,...,p}, type the number &quot;p&quot; in the levels box, enter the p x p variance-covariance matrix for the levels of the categorical variable in the covariance matrix box, and optionally add estimates for the coefficients of the categories in the estimates box (this will allow for plotting of comparison intervals). Numbers should be seperated by spaces in all boxes, and rows on seperate lines for the covariance matrix; press the "Example" button for a demonstration.</p>
+
+	  <p>Input to the &quot;Covariance Matrix&quot; can be either:</p>
+
+	  <ul>
+		<li>Square Variance-Covariance matrix</li>
+		<li>Lower Triangle of Variance-Covariance matrix</li>
+		<li>One line list of standard errors, then lower triangle of correlation matrix.</li>
+	  </ul>
+
+	  <p>The number of levels should be equal to the number of lines in the &quot;Covariance Matrix&quot;. Currently scientific notation is not recognised.</p>
+
+	  <p>Input to &quot;Estimates&quot; is optional - it should be a list seperated by spaces (not semi-colons or commas). If a valid list is given, a plot of estimates will be shown and an estimates column will be included in the table of quasi variances.</p>
+
+	  <p>The Kuvee calculator implements the procedure suggested by <a href="http://warwick.ac.uk/dfirth/">Professor D. Firth</a> to calculate quasi variances for categorical variables from a covariance matrix or standard errors with correlation matrix. For more information on quasi variances, see <a href="http://www.warwick.ac.uk/qvcalc/">here</a>.</p>
+
+	  <p>If you have any suggestions or find any bugs, please <a href="mailto:s.killingbeck@warwick.ac.uk?subject=Kuvee" target="_blank">send an email</a> with details.</p>
+
+	  <p>For more advanced users interested in minimising the maximum error in the quasi variances instead of the average error, please see the Kuvee2 page.</p>
+	</div>
+
+  </div>
+
+</div>
+
+<div class="wrapper"> 
+  <div class="boxtitle" onclick="toggleBox('inBox');">Kuvee: Input <span id="inTitle"></span>  </div>
+  <div class="outer"> 
+	<div class="inner" id="inBox"> <span>Please provide the number of categories, the covariance matrix and (optionally) coefficient estimates:<br><br></span>
+	  <form name="qvIn" method="GET">
+	  	<span id="inLevels"></span>
+	  	<textarea class="qvtextarea" placeholder="Number of contrast categories" title="Number of contrast categories" name="levels" cols="40" rows="1" autofocus></textarea>
+	  	 <span id="inMatbox"></span>
+	  	 <textarea class="qvtextarea" placeholder="Variance-Covariance matrix for the contrasts" title="Variance-Covariance matrix for the contrasts" name="matbox" cols="80" rows="10" wrap="physical"></textarea> 
+	  	 <span id="inEsti"></span>
+	  	 <textarea class="qvtextarea" placeholder="(Optional) estimates for the contrasts coefficients (for plotting)" title="(Optional) estimates for the contrasts coefficients (for plotting)" name="esti" cols="80" rows="1" wrap="physical"></textarea>
+	  	 <button class="qvbutton" type="button" value="Calculate" onclick="qvcalc(this.form);">Calculate</button>
+	  	 <button class="qvbutton" type="button" value="Example" onclick="example(this.form);">Example</button>
+	  	 <button class="qvbutton" type="button" value="Clear" onclick="clearf(this.form);">Reset</button> </form>
+
+	</div>
+
+  </div>
+
+</div>
+
+<div class="wrapper"> 
+  <div class="boxtitle" onclick="toggleBox('outBox');">Kuvee: Output <span id="outTitle"></span>  </div>
+
+  <div class="outer"> 
+	<div class="inner" id="outBox" style="display:none"> <span id="outQV"></span><br />
+		<span id="outPlot"></span> <span id="outLink"></span> <img id="outImg" alt="..." width="80%" style="display:none" border="0" /> 
+	  <p><strong>Covariance Matrix</strong>		</p>
+
+<span id="outMat"></span> </div>
+
+  </div>
+
+</div>
+</body>
+</html>
